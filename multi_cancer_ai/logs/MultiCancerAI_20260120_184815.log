@@ -1,0 +1,4 @@
+2026-01-20 18:48:15 - MultiCancerAI - INFO - Avvio Pipeline di Training Multi-Cancer AI
+2026-01-20 18:48:15 - MultiCancerAI - INFO - Configurazione: Immagini (224, 224), Batch 32, Epochs 30
+2026-01-20 18:48:15 - MultiCancerAI - INFO - Fase 1: Preparazione Dati...
+2026-01-20 18:48:17 - MultiCancerAI - ERROR - Errore nel caricamento dati: '_PrefetchDataset' object has no attribute 'class_indices'
