@@ -184,7 +184,3 @@ Questo software è un **CDSS (Clinical Decision Support System)** sperimentale.
 1.  **Non è un Dispositivo Medico**: Non possiede marcatura CE o approvazione FDA.
 2.  **Responsabilità**: L'autore declina ogni responsabilità per l'uso in ambito clinico reale.
 3.  **Supervisione**: Qualsiasi output del sistema deve essere verificato da un patologo umano qualificato. L'AI può sbagliare.
-
----
-
-*Developed with ❤️ by Ashura & The Google DeepMind Team Agent*
