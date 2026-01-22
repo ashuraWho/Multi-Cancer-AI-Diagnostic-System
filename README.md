@@ -59,6 +59,8 @@ Il nostro sistema lavora su "Patches" (ritagli quadrati) di immagini istologiche
 
 > **Nota**: Il sistema distingue non solo tra "Sano" e "Malato", ma identifica lo specifico organo e tipo di patologia basandosi sulle texture cellulari (nuclei, citoplasma, organizzazione tissutale).
 
+> **Dataset Kaggle**: Multi Cancer Dataset [Link](https://www.kaggle.com/datasets/obulisainaren/multi-cancer)
+
 ---
 
 ## ⚙️ Architettura Tecnologica
