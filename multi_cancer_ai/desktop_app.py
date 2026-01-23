@@ -1,13 +1,23 @@
+import os
+import sys
+from pathlib import Path
+import time
+import json
+import threading
+
+# -----------------------------------------------------------------------------
+# CRITICAL: SET ENV VARS BEFORE ANY OTHER HEAVY IMPORT
+# -----------------------------------------------------------------------------
+# Disable TensorFlow Metal/GPU to prevent SegFaults with Tkinter on macOS
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0" # Optional: disable oneDNN if conflicting
+
+# NOW import GUI libs
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk
-import sys
-import os
-from pathlib import Path
-import threading
-import time
-import json
 
 # Setup path to handle imports correctly
 current_file_path = Path(__file__).resolve()
@@ -17,6 +27,7 @@ if str(project_root) not in sys.path:
 
 from multi_cancer_ai.config import config
 from multi_cancer_ai.src.active_trainer import ActiveTrainer
+from multi_cancer_ai.src.evaluator import GradCAM
 
 class CancerDiagApp(ctk.CTk):
     def __init__(self):
@@ -172,19 +183,32 @@ class CancerDiagApp(ctk.CTk):
     def change_appearance_mode(self, mode):
         ctk.set_appearance_mode(mode)
 
-    def _initial_backend_load(self):
-        threading.Thread(target=self._load_backend_worker, daemon=True).start()
-
-    def _load_backend_worker(self):
-        # ... logic to load libs and model ...
-        # (This logic is moved to DiagnosisFrame generally, but we keep core model state in App)
-        import numpy as np
-        import cv2
-        self.np = np
-        self.cv2 = cv2
-        
         # Trigger model load in the Diagnosis Frame
-        self.frames["Diagnosis"].load_model_backend()
+        # self.frames["Diagnosis"].load_model_backend() -> Do NOT call this directly from thread if it touches UI
+        
+        # Schedule the loading via the DiagnosisFrame (but DiagnosisFrame needs to split UI/Logic)
+        # Actually, let's just make DiagnosisFrame expose a method that STARTS the thread, or handles the logic
+        
+        # Correct pattern:
+        # App calls DiagnosisFrame.start_backend_loading() on MAIN THREAD
+        # DiagnosisFrame.start_backend_loading() updates UI -> Starts Thread -> Thread does work -> Callback to UI
+        
+        # So here in _load_backend_worker (which is ALREADY a thread), we should purely do the IMPORTS 
+        # that are shared, and then perhaps schedule the next step?
+        
+        # But wait, imports can be heavy.
+        
+        # Let's pivot:
+        # 1. _initial_backend_load (Main Thread) -> Calls DiagnosisFrame.start_loading()
+        # 2. DiagnosisFrame.start_loading() (Main Thread) -> Updates UI -> Starts NEW Thread for Model
+        
+        # The current `_load_backend_worker` is just importing numpy/cv2.
+        # Let's change this structure.
+        pass
+
+    def _initial_backend_load(self):
+        # Delegate everything to the explicit loading flow
+        self.frames["Diagnosis"].start_model_loading()
 
 
 # --- Sub-Frames ---
@@ -257,6 +281,11 @@ class DiagnosisFrame(ctk.CTkFrame):
         self.status = ctk.CTkLabel(self.ctrl_frame, text="System Init...")
         self.status.pack(side="left", padx=20)
         
+        # Heatmap Switch
+        self.heatmap_var = ctk.BooleanVar(value=False)
+        self.switch_heatmap = ctk.CTkSwitch(self.ctrl_frame, text="Show Heatmap", variable=self.heatmap_var, command=self._toggle_heatmap)
+        self.switch_heatmap.pack(side="right", padx=20)
+
         # If result is wrong button (hidden initially)
         self.btn_wrong = ctk.CTkButton(self.ctrl_frame, text="Wrong?", fg_color="orange", hover_color="#d35400", command=self._on_wrong_diag)
         
@@ -277,6 +306,7 @@ class DiagnosisFrame(ctk.CTkFrame):
         self.btn_load.configure(text=t["diag_load_btn"])
         self.res_frame.configure(label_text=t["diag_result"].format("..."))
         self.btn_wrong.configure(text=t["diag_wrong_btn"])
+        self.switch_heatmap.configure(text=t.get("diag_heatmap", "Heatmap"))
 
     def _on_wrong_diag(self):
         # Switch to training tab and pass current image
@@ -288,13 +318,93 @@ class DiagnosisFrame(ctk.CTkFrame):
         self.current_img_path = None
         self.current_pil_img = None
         self.predictions = None
-    
-    def load_model_backend(self):
-        # Triggered by App's thread
+        self.heatmap_var.set(False)
+
+    def _toggle_heatmap(self):
+        if not self.current_pil_img:
+            return
+            
+        if self.heatmap_var.get():
+            # Turn ON
+            self._compute_and_show_heatmap()
+        else:
+            # Turn OFF - Restore original
+            self._show_image_pil(self.current_pil_img)
+
+    def _compute_and_show_heatmap(self):
+        if self.app.model_type != 'keras':
+            messagebox.showwarning("Feature Not Available", "Heatmap requires the full Keras model.\nCurrent mode: " + str(self.app.model_type))
+            self.heatmap_var.set(False)
+            return
+
+        threading.Thread(target=self._heatmap_worker, daemon=True).start()
+
+    def _heatmap_worker(self):
         try:
-            self.status.configure(text="Loading Model...")
-            self.progress.pack(side="left", padx=10)
-            self.progress.start()
+            # Re-prepare image
+            img_resized = self.current_pil_img.resize((config.IMG_WIDTH, config.IMG_HEIGHT), Image.Resampling.LANCZOS)
+            img_array = self.app.np.array(img_resized)
+            if img_array.shape[-1] == 4: img_array = img_array[..., :3]
+            img_array = img_array.astype('float32') / 255.0
+            img_batch = self.app.np.expand_dims(img_array, axis=0)
+
+            # Compute Heatmap
+            grad_cam = GradCAM(self.app.model)
+            heatmap = grad_cam.compute_heatmap(img_batch)
+            
+            # Overlay
+            # We need the original image as array for overlay, but scaled
+            # GradCAM returns 224x224 heatmap usually
+            
+            # We want to display high-res overlay if possible, but GradCAM output is low res.
+            # Best is to overlay on the 224x224 and then maybe upscale for display? 
+            # Or overlay on the original PIL image?
+            
+            # Let's use the low-res overlay for now as it's easier with cv2
+            # Evaluator.overlay_heatmap takes (heatmap, original_image)
+            # original_image should be uint8 0-255
+            
+            original_cv = (img_array * 255).astype('uint8')
+            overlay = grad_cam.overlay_heatmap(heatmap, original_cv, alpha=0.4)
+            
+            # Convert back to PIL for TKinter
+            overlay_pil = Image.fromarray(overlay)
+            
+            self.after(0, lambda: self._show_image_pil(overlay_pil))
+            
+        except Exception as e:
+            print(f"Heatmap Error: {e}")
+            self.after(0, lambda: messagebox.showerror("Error", f"Heatmap failed: {e}"))
+            self.after(0, lambda: self.heatmap_var.set(False))
+
+    def _show_image_pil(self, pil_img):
+        # Resize for display
+        display_img = pil_img.copy()
+        display_img.thumbnail((400, 400), Image.Resampling.LANCZOS)
+        tk_img = ctk.CTkImage(light_image=display_img, dark_image=display_img, size=display_img.size)
+        self.canvas.configure(image=tk_img, text="")
+        self.canvas.image = tk_img
+    
+    def start_model_loading(self):
+        # 1. UI Update (Main Thread)
+        self.status.configure(text="Loading Model... (Sync)")
+        self.progress.pack(side="left", padx=10)
+        self.progress.start()
+        
+        # Force UI update so the user sees the spinner before we freeze
+        self.app.update()
+        
+        # 2. Run Synchronously (No Threading on macOS to avoid SegFault)
+        # We use a slight delay to ensure UI is rendered first
+        self.after(100, self._load_model_sync)
+
+    def _load_model_sync(self):
+        try:
+            # Shared Libs Import
+            import numpy as np
+            import cv2
+            self.app.np = np
+            self.app.cv2 = cv2
             
             # Paths
             tflite_path = config.MODELS_DIR / "model_optimized.tflite"
@@ -321,7 +431,17 @@ class DiagnosisFrame(ctk.CTkFrame):
                 self._on_model_loaded("AI (Kaggle Tuned)")
                 return
 
-            # 2. Try TFLite
+            # 3. Base Keras Model (Standard CPU)
+            # We prioritize this now because TFLite is causing SegFaults on macOS with GUI
+            print("[INFO] Loading Keras model (Base)...")
+            import tensorflow as tf
+            if keras_path.exists():
+                self.app.model = tf.keras.models.load_model(str(keras_path))
+                self.app.model_type = 'keras'
+                self._on_model_loaded("Keras Model (Base)")
+                return
+
+            # 4. Optimization: Try TFLite (Last Resort)
             try:
                 print("[INFO] Attempting to load TFLite model...")
                 if not tflite_path.exists():
@@ -345,20 +465,18 @@ class DiagnosisFrame(ctk.CTkFrame):
             except Exception as e_tflite:
                 print(f"[WARN] TFLite Load Failed: {e_tflite}")
 
-            # 3. Fallback to Base Keras
-            print("[INFO] Falling back to Keras model...")
-            import tensorflow as tf
-            if not keras_path.exists():
-                raise FileNotFoundError(f"Keras model not found at {keras_path}")
-
-            self.app.model = tf.keras.models.load_model(str(keras_path))
-            self.app.model_type = 'keras'
-            self._on_model_loaded("Keras Model (Base)")
+            # 5. Last Fallback if everything fails
+            raise FileNotFoundError("No suitable model found (checked Custom, Tuned, Keras, TFLite)")
 
         except Exception as e:
             print(f"[ERROR] Init Failed: {e}")
-            self.status.configure(text=f"Error: {str(e)}", text_color="red")
-            self.progress.stop()
+            # Schedule Error UI Update
+            self.after(0, lambda: self._on_loading_error(str(e)))
+    
+    def _on_loading_error(self, err_msg):
+        self.status.configure(text=f"Error: {err_msg}", text_color="red")
+        self.progress.stop()
+        self.progress.pack_forget()
 
     def _on_model_loaded(self, msg):
         self.app.trainer_loaded = True
@@ -383,12 +501,10 @@ class DiagnosisFrame(ctk.CTkFrame):
     def _show_image(self, path):
         img = Image.open(path)
         self.current_pil_img = img
-        # Resize for display
-        display_img = img.copy()
-        display_img.thumbnail((400, 400), Image.Resampling.LANCZOS)
-        tk_img = ctk.CTkImage(light_image=display_img, dark_image=display_img, size=display_img.size)
-        self.canvas.configure(image=tk_img, text="")
-        self.canvas.image = tk_img
+        self.heatmap_var.set(False) # Reset heatmap
+        self._show_image_pil(img)
+        
+
 
     def _run_inference(self, path):
          # Run on thread

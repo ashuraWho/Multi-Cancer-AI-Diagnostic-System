@@ -91,7 +91,7 @@ class Trainer:
         # 4. CSVLogger
         # Salva lo storico delle metriche (loss, acc, val_loss, val_acc) in un file CSV.
         # Utile per analisi post-training (es. plottare curve in Excel/Python).
-        csv_logger = CSVLogger(str(config.LOGS_DIR / "training_log.csv"))
+        csv_logger = CSVLogger(str(config.RESULTS_DIR / "training_log.csv"))
         callbacks_list.append(csv_logger)
         
         return callbacks_list

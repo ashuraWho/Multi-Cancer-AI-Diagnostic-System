@@ -6,13 +6,16 @@ Quando un utente corregge una diagnosi errata, il sistema può:
 2. Eseguire un rapido fine-tuning su quella singola immagine per aggiornare immediatamente i pesi (sperimentale).
 """
 
-import tensorflow as tf
-import numpy as np
+# Imports
 from pathlib import Path
-import shutil   # Per copiare/spostare file
-import datetime # Per generare timestamp unici
+import shutil
+import datetime
 
 from multi_cancer_ai.config import config # Importiamo la configurazione globale
+
+# Nota: TensorFlow e Numpy vengono importati localmente nei metodi per evitare
+# conflitti di inizializzazione (SegFault) con Tkinter su macOS.
+
 
 class ActiveTrainer:
     """
@@ -46,6 +49,8 @@ class ActiveTrainer:
         Returns:
             tuple: (bool, str) -> (Successo?, Messaggio di stato)
         """
+        import tensorflow as tf # Lazy import
+        
         # Logica di selezione del file: preferisci il custom se esiste
         path_to_load = self.custom_model_path if self.custom_model_path.exists() else self.model_path
         print(f"[TRAINER] Loading model from: {path_to_load}")
@@ -86,6 +91,9 @@ class ActiveTrainer:
         Returns:
             tuple: (bool, str) -> (Successo?, Messaggio)
         """
+        import tensorflow as tf # Lazy import
+        import numpy as np
+        
         # Verifica preliminare: il modello deve essere caricato
         if self.model is None:
             return False, "Model not loaded"
@@ -100,6 +108,7 @@ class ActiveTrainer:
             num_classes = len(config.CLASS_MAPPING) # Numero totale di classi (8)
             y = np.zeros((1, num_classes))          # Vettore di zeri: [0, 0, 0, 0, 0, 0, 0, 0]
             y[0, label_index] = 1.0                 # Impostiamo a 1 l'indice corretto: [0, 0, 1, 0...]
+            
             
             print(f"[TRAINER] Training on class index: {label_index}")
             

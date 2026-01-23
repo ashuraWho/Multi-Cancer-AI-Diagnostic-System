@@ -10,6 +10,8 @@ import os
 import logging
 
 # Importiamo 'matplotlib.pyplot' per generare i grafici delle performance.
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 # Importiamo 'datetime' per generare timestamp da inserire nei nomi dei file.

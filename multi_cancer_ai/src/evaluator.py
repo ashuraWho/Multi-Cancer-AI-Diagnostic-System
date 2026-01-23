@@ -4,12 +4,8 @@ Include calcolo delle metriche di classificazione e generazione di Heatmap Grad-
 su quali aree dell'immagine l'AI si sta concentrando.
 """
 
-import numpy as np
-import tensorflow as tf
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.metrics import classification_report, confusion_matrix
-import cv2 # OpenCV per l'elaborazione immagini
+
+# Lazy imports for: matplotlib, seaborn, sklearn, cv2 to avoid segfaults
 
 class Evaluator:
     """
@@ -91,6 +87,7 @@ class Evaluator:
         Returns:
             str: Stringa formattata contenente la tabella delle metriche.
         """
+        from sklearn.metrics import classification_report
         report = classification_report(y_true, y_pred, target_names=self.class_names)
         return report
 
@@ -104,6 +101,13 @@ class Evaluator:
             y_pred: Etichette predette.
             save_path: Percorso dove salvare l'immagine PNG.
         """
+        # Local imports
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        from sklearn.metrics import confusion_matrix
+
         # Calcolo della matrice numerica
         cm = confusion_matrix(y_true, y_pred)
         
@@ -190,6 +194,8 @@ class GradCAM:
         Returns:
             numpy.ndarray: Heatmap 2D normalizzata (valori 0-1).
         """
+        import tensorflow as tf
+        
         # Costruiamo un modello "Grad-Model" che ha:
         # Input: l'input originale
         # Output: [Output Layer Convoluzionale, Output Predizione Finale]
@@ -249,6 +255,8 @@ class GradCAM:
         Returns:
             numpy.ndarray: Immagine finale sovrapposta.
         """
+        import cv2
+
         # Scaliamo a 0-255 intero
         heatmap = np.uint8(255 * heatmap)
         

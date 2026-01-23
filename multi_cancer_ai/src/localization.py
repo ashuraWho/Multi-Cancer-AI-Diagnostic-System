@@ -35,6 +35,7 @@ TRANSLATIONS = {
         "diag_confidence": "Confidenza: {:.1f}%", # Placeholder {:.1f} per numero float a 1 decimale
         "diag_time": "Tempo: {:.3f}s",            # Placeholder {:.3f} per tempo a 3 decimali
         "diag_wrong_btn": "Diagnosi Errata? Correggila!",
+        "diag_heatmap": "Mostra Heatmap (Grad-CAM)",
         
         # --- Pagina Training Attivo ---
         "train_title": "Training Attivo (Insegnamento)",
@@ -74,6 +75,7 @@ TRANSLATIONS = {
         "diag_confidence": "Confidence: {:.1f}%",
         "diag_time": "Time: {:.3f}s",
         "diag_wrong_btn": "Wrong Diagnosis? Fix IT!",
+        "diag_heatmap": "Show Heatmap (Grad-CAM)",
         
         # --- Active Training Page ---
         "train_title": "Active Training (Teaching)",

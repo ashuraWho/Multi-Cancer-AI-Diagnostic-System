@@ -27,7 +27,7 @@
 
 ## 🌟 Introduzione e Visione
 
-Il **Multi-Cancer AI Diagnostic System** nasce con un obiettivo ambizioso: democratizzare l'accesso a diagnosi istologiche rapide e accurate, fornendo ai patologi uno "secondo occhio" digitale instancabile.
+Il **Multi-Cancer AI Diagnostic System** nasce con un obiettivo ambizioso: democratizzare l'accesso a diagnosi istologiche rapide e accurate, fornendo ai patologi un "secondo occhio" digitale instancabile.
 
 ### Per i Non-Tecnici
 Immagina un assistente virtuale che ha studiato milioni di immagini di tessuti umani al microscopio. Quando un medico carica l'immagine di una biopsia, questo sistema la analizza pixel per pixel e suggerisce: "Attenzione, questo tessuto assomiglia al 99% a un Linfoma". Non sostituisce il medico, ma lo aiuta a non trascurare nulla e a lavorare più velocemente.
@@ -68,7 +68,7 @@ Il nostro sistema lavora su "Patches" (ritagli quadrati) di immagini istologiche
 Il cuore del sistema è una Rete Neurale profonda. Ecco le scelte ingegneristiche nel dettaglio:
 
 ### 1. Il Modello: EfficientNetV2 (Google AI)
-Abbiamo scelto `EfficientNetV2-B0` invece di architetture classiche (come ResNet50 o VGG16) per tre motivi:
+Ho scelto `EfficientNetV2-B0` invece di architetture classiche (come ResNet50 o VGG16) per tre motivi:
 *   **Efficienza**: Minore numero di parametri, addestramento più veloce.
 *   **Accuratezza**: Utilizza blocchi *Fused-MBConv* che catturano meglio le feature locali tipiche dei tessuti biologici.
 *   **Training Speed**: Ottimizzato per le moderne TPU e GPU.
@@ -80,7 +80,7 @@ Non partiamo da zero ("Tabula Rasa"). Il modello nasce già "imparato" sul datas
 
 ### 3. Pipeline Dati Ottimizzata (tf.data)
 Il caricamento delle immagini è spesso il collo di bottiglia. Usiamo l'API `tf.data` per creare una pipeline asincrona:
-*   **Parallelismo**: La CPU cariche e prepara le immagini *mentre* la GPU addestra il blocco precedente.
+*   **Parallelismo**: La CPU carica e prepara le immagini *mentre* la GPU addestra il blocco precedente.
 *   **Data Augmentation**: Creiamo artificialmente nuove immagini (rotazioni, zoom) *al volo* per rendere il modello robusto a variazioni.
 *   **Prefetching**: Manteniamo sempre la GPU "sfamata" di dati.
 
@@ -93,7 +93,7 @@ Il modello non è statico. Se l'AI sbaglia una diagnosi e un medico la corregge,
 
 ### 👁️ Explainable AI (XAI) con Grad-CAM
 Uno dei problemi dell'AI è la "Scatola Nera" (Black Box): ti dice "è cancro" ma non *perché*.
-Il nostro modulo **Grad-CAM** (Gradient-weighted Class Activation Mapping) genera una "mappa di calore" termica sovrapposta all'immagine originale.
+Il mio modulo **Grad-CAM** (Gradient-weighted Class Activation Mapping) genera una "mappa di calore" termica sovrapposta all'immagine originale.
 *   **Rosso**: L'area che ha convinto l'AI (es. un nucleo cellulare irregolare).
 *   **Blu**: Aree ignorate (es. sfondo vuoto).
 Questo permette al medico di *fidarsi* (o meno) della diagnosi verificando se l'AI ha guardato la zona giusta.
@@ -167,7 +167,7 @@ python3 -m multi_cancer_ai.train_main
 Vedrai scorrere i log: "Fase 1: Caricamento...", "Fase 2: Training...".
 
 ### 3. Analisi Risultati
-Al termine (dopo circa 30-60 minuti a seconda del PC), troverai nella cartella `results/`:
+Al termine, troverai nella cartella `results/`:
 *   `training_history.png`: Grafico che mostra se il modello ha imparato bene.
 *   `confusion_matrix.png`: Grafico che mostra quali cancri vengono confusi tra loro.
 *   `training_log.csv`: I dati grezzi excel-compatibili.
