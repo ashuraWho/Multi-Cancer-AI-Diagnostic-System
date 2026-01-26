@@ -1,36 +1,48 @@
 """
 Modulo di utility per logging, gestione file e visualizzazioni grafiche ausiliarie.
-Contiene funzioni trasversali usate da vari moduli del progetto.
+
+Contiene funzioni trasversali usate da vari moduli del progetto:
+- Configurazione logging strutturato (file + console)
+- Generazione grafici training history (accuracy/loss curves)
+- Utility per timestamp e formattazione
+
+Author: Multi-Cancer AI Team
+License: MIT
 """
 
-# Importiamo 'os' per operazioni di sistema (anche se qui usiamo principalmente logging e matplotlib).
-import os
-
-# Importiamo il modulo standard 'logging' per gestire i log (info, warning, error).
+from typing import Optional
+from pathlib import Path
 import logging
-
-# Importiamo 'matplotlib.pyplot' per generare i grafici delle performance.
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use('Agg')  # Backend non-interattivo per server/script
 import matplotlib.pyplot as plt
-
-# Importiamo 'datetime' per generare timestamp da inserire nei nomi dei file.
 from datetime import datetime
 
-# Importiamo la costante LOGS_DIR dal nostro modulo di configurazione.
 from multi_cancer_ai.config.config import LOGS_DIR
 
-def setup_logging(name="MultiCancerAI"):
+def setup_logging(name: str = "MultiCancerAI") -> logging.Logger:
     """
     Configura il sistema di logging per scrivere i messaggi sia sulla console (stdout)
-    che su un file di testo persistente. Questo è cruciale per il debugging e per tenere traccia
-    degli esperimenti passati.
+    che su un file di testo persistente.
+    
+    Configurazione:
+        - Livello: INFO (registra INFO, WARNING, ERROR, CRITICAL)
+        - Formato: timestamp - logger_name - level - message
+        - Output: Console (StreamHandler) + File (FileHandler con timestamp nel nome)
+        - File log: logs/<name>_<timestamp>.log
     
     Args:
-        name (str): Il nome del logger (default: "MultiCancerAI").
-        
+        name: Il nome del logger (default: "MultiCancerAI").
+              Usa nomi diversi per distinguere log di training vs inference.
+    
     Returns:
-        logging.Logger: Un'istanza di logger configurata e pronta all'uso.
+        Logger configurato e pronto all'uso. Se il logger esiste già, viene riutilizzato
+        (singleton pattern per evitare duplicati).
+    
+    Example:
+        >>> logger = setup_logging("TrainingPipeline")
+        >>> logger.info("Training started")
+        >>> # Log salvato in: logs/TrainingPipeline_20240126_143022.log
     """
     # Creiamo un timestamp attuale (es. 20231027_103000) per rendere unico il file di log.
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -73,16 +85,41 @@ def setup_logging(name="MultiCancerAI"):
     # Restituiamo l'oggetto logger configurato al chiamante.
     return logger
 
-def plot_training_history(history, save_path=None):
+def plot_training_history(
+    history,
+    save_path: Optional[Path] = None
+) -> None:
     """
-    Genera, visualizza e facoltativamente salva su disco i grafici dell'andamento del training.
-    Visualizza due subplot:
-    1. Accuracy (Training vs Validation)
-    2. Loss (Training vs Validation)
+    Genera e salva i grafici dell'andamento del training (accuracy e loss curves).
+    
+    Crea una figura con due subplot side-by-side:
+    1. Accuracy: Training Accuracy vs Validation Accuracy (linee blu e rosse)
+    2. Loss: Training Loss vs Validation Loss (linee blu e rosse)
+    
+    Utile per:
+    - Identificare overfitting (gap tra train e val)
+    - Verificare convergenza (curve che si stabilizzano)
+    - Debugging problemi di training (loss che non scende)
     
     Args:
-        history: L'oggetto 'History' restituito dal metodo model.fit() di Keras. Contiene le metriche per ogni epoca.
-        save_path (Path, optional): Il percorso completo dove salvare l'immagine del grafico. Se None, non salva.
+        history: L'oggetto History restituito da model.fit() di Keras.
+                Deve contenere almeno 'accuracy', 'val_accuracy', 'loss', 'val_loss' in history.history.
+        save_path: Percorso opzionale dove salvare l'immagine PNG.
+                  Se None, il grafico viene generato ma non salvato (utile per debug).
+                  Può essere Path object o stringa.
+    
+    Raises:
+        KeyError: Se history.history non contiene le chiavi attese (accuracy, loss, etc.).
+        IOError: Se il salvataggio fallisce per problemi di permessi o spazio disco.
+    
+    Note:
+        - La figura viene chiusa automaticamente dopo il salvataggio (plt.close())
+        - Dimensione figura: 12x5 pollici per buona leggibilità
+        - Formato output: PNG (lossless, adatto per report)
+    
+    Example:
+        >>> history = model.fit(train_ds, validation_data=val_ds, epochs=30)
+        >>> plot_training_history(history, save_path="results/training_history.png")
     """
     # Estraiamo i dati di Accuracy dal dizionario history.history.
     # .get() restituisce una lista vuota [] se la chiave non esiste (sicurezza).

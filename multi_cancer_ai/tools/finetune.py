@@ -36,17 +36,35 @@ def finetune_model():
     # 2. Load Data & Optimize
     print(f"[INFO] Loading data from {import_dir}...")
     try:
+        # Best practice: creare anche un validation set per:
+        # - monitorare overfitting su dataset importati (spesso più piccoli/rumorosi)
+        # - rendere disponibili metriche di validazione/early stopping
         train_ds = tf.keras.utils.image_dataset_from_directory(
             import_dir,
             image_size=config.IMG_SIZE,
             batch_size=16, 
             label_mode='categorical',
-            shuffle=True
+            shuffle=True,
+            validation_split=0.2,
+            subset="training",
+            seed=config.SEED,
+        )
+
+        val_ds = tf.keras.utils.image_dataset_from_directory(
+            import_dir,
+            image_size=config.IMG_SIZE,
+            batch_size=16,
+            label_mode='categorical',
+            shuffle=True,
+            validation_split=0.2,
+            subset="validation",
+            seed=config.SEED,
         )
         
         # Performance Pipeline
         AUTOTUNE = tf.data.AUTOTUNE
         train_ds = train_ds.cache().prefetch(buffer_size=AUTOTUNE)
+        val_ds = val_ds.cache().prefetch(buffer_size=AUTOTUNE)
         
     except Exception as e:
         print(f"[ERROR] Could not load dataset: {e}")
@@ -106,7 +124,13 @@ def finetune_model():
     # 6. Train
     EPOCHS = 5
     print(f"[INFO] Training for {EPOCHS} epochs...")
-    history = model.fit(train_ds, epochs=EPOCHS)
+    callbacks = [
+        # Riduce il LR se la validazione si blocca -> più stabile su dataset piccoli
+        tf.keras.callbacks.ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=1, verbose=1),
+        # Ferma se inizia a peggiorare -> evita overfitting brutale
+        tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=2, restore_best_weights=True, verbose=1),
+    ]
+    history = model.fit(train_ds, validation_data=val_ds, epochs=EPOCHS, callbacks=callbacks)
     
     # 7. Save Model & Classes
     print(f"[INFO] Saving tuned model to {save_path}...")

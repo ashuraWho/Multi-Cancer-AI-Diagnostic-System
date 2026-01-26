@@ -29,6 +29,14 @@ from multi_cancer_ai.config import config
 from multi_cancer_ai.src.active_trainer import ActiveTrainer
 from multi_cancer_ai.src.evaluator import GradCAM
 
+# -----------------------------------------------------------------------------
+# Security / robustness defaults for local desktop usage
+# -----------------------------------------------------------------------------
+# Anche se l'app è “solo desktop”, una validazione minima dell'input evita crash,
+# freeze (file enormi) o immagini corrotte.
+_ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tif", ".tiff"}
+_MAX_IMAGE_BYTES = 25 * 1024 * 1024  # 25MB: limite conservativo per UI reattiva
+
 class CancerDiagApp(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -490,8 +498,26 @@ class DiagnosisFrame(ctk.CTkFrame):
 
     def load_image(self):
         try:
-            path = filedialog.askopenfilename(title="Select Scan", filetypes=[("Images", "*.png *.jpg *.jpeg *.tif")])
+            path = filedialog.askopenfilename(
+                title="Select Scan",
+                filetypes=[("Images", "*.png *.jpg *.jpeg *.tif *.tiff")],
+            )
             if path:
+                # --- Input validation ---
+                p = Path(path)
+                if p.suffix.lower() not in _ALLOWED_EXTENSIONS:
+                    messagebox.showerror("Unsupported file", f"Unsupported extension: {p.suffix}\nAllowed: {', '.join(sorted(_ALLOWED_EXTENSIONS))}")
+                    return
+
+                try:
+                    size = p.stat().st_size
+                    if size > _MAX_IMAGE_BYTES:
+                        messagebox.showerror("File too large", f"File size is {size/1024/1024:.1f}MB.\nMax allowed: {_MAX_IMAGE_BYTES/1024/1024:.0f}MB.")
+                        return
+                except Exception:
+                    # Se non riusciamo a leggere la size, continuiamo e lasciamo gestire a PIL.
+                    pass
+
                 self.current_img_path = path
                 self._show_image(path)
                 self._run_inference(path)
@@ -499,6 +525,14 @@ class DiagnosisFrame(ctk.CTkFrame):
             print(f"Error: {e}")
 
     def _show_image(self, path):
+        # Verifica base integrità/decodifica: `verify()` intercetta molti file corrotti.
+        try:
+            with Image.open(path) as _im:
+                _im.verify()
+        except Exception as e:
+            messagebox.showerror("Invalid image", f"Could not read image.\nReason: {e}")
+            return
+
         img = Image.open(path)
         self.current_pil_img = img
         self.heatmap_var.set(False) # Reset heatmap

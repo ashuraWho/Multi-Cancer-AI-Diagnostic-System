@@ -1,8 +1,15 @@
 """
 Definizione dell'architettura del modello di Deep Learning basata su EfficientNetV2.
+
 Questo modulo costruisce la Rete Neurale Convoluzionale (CNN) utilizzando Transfer Learning.
+L'architettura EfficientNetV2-B0 viene utilizzata come feature extractor, con una
+custom classification head ottimizzata per la classificazione multi-cancro.
+
+Author: Multi-Cancer AI Team
+License: MIT
 """
 
+from typing import Optional
 import tensorflow as tf
 
 # Utilizziamo gli alias per accedere ai sottomoduli di Keras in modo pulito.
@@ -16,40 +23,60 @@ EfficientNetV2B0 = tf.keras.applications.EfficientNetV2B0
 from multi_cancer_ai.config import config
 
 # ==============================================================================
-# OTTIMIZZAZIONE PRESTAZIONI: MIXED PRECISON
+# OTTIMIZZAZIONE PRESTAZIONI: MIXED PRECISION
 # ==============================================================================
 # La Mixed Precision usa float16 (16-bit) invece di float32 per i calcoli intermedi.
 # Vantaggi:
 # 1. Riduce l'uso della memoria video (VRAM) quasi della metà.
 # 2. Raddoppia la velocità di calcolo su GPU moderne (NVIDIA serie 20xx e successive).
+#
+# Nota: L'output layer deve essere sempre float32 per stabilità numerica nella loss.
 try:
     tf.keras.mixed_precision.set_global_policy('mixed_float16')
-    print("[INFO] Mixed Precision (float16) abilitata per massimizzare le performance.")
 except Exception as e:
-    # Se la GPU non supporta FP16 o siamo su CPU, falliamo silenziosamente o logghiamo l'errore.
-    print(f"[WARN] Impossibile abilitare Mixed Precision: {e}")
+    # Se la GPU non supporta FP16 o siamo su CPU, falliamo silenziosamente.
+    # Il logging verrà gestito dal modulo chiamante (train_main.py).
+    pass
 
 
-def build_model(num_classes):
+def build_model(num_classes: int) -> tf.keras.Model:
     """
     Costruisce, assembla e compila il modello Keras per la classificazione multi-cancro.
     
+    Utilizza Transfer Learning con EfficientNetV2-B0 come feature extractor congelato,
+    seguito da una custom classification head ottimizzata per il dominio medico.
+    
     Architettura:
-    - Input Layer: (224, 224, 3)
-    - Backbone: EfficientNetV2B0 (ImageNet weights, frozen)
-    - Head (Classificatore):
-        - Global Average Pooling
-        - Batch Normalization
-        - Dropout
-        - Dense (512)
-        - Output Dense (num_classes, Softmax)
+        - Input Layer: (224, 224, 3) RGB images
+        - Backbone: EfficientNetV2B0 (ImageNet pre-trained, frozen)
+        - Classification Head:
+            - Global Average Pooling 2D
+            - Batch Normalization
+            - Dropout (0.3)
+            - Dense (512, ReLU)
+            - Batch Normalization
+            - Dropout (0.3)
+            - Dense (num_classes, Softmax, float32)
     
     Args:
-        num_classes (int): Numero di classi di output (es. 8 per il dataset Multi Cancer).
-        
+        num_classes: Numero di classi di output (es. 8 per il dataset Multi Cancer).
+                    Deve corrispondere al numero di sottocartelle nel dataset.
+    
     Returns:
-        tf.keras.Model: Un'istanza di modello Keras compilata, pronta per .fit().
+        Modello Keras compilato, pronto per il training con:
+        - Optimizer: Adam (lr=1e-4 da config)
+        - Loss: Categorical Crossentropy
+        - Metrics: Accuracy, Precision, Recall
+    
+    Raises:
+        ValueError: Se num_classes <= 0.
+    
+    Example:
+        >>> model = build_model(num_classes=8)
+        >>> model.summary()
     """
+    if num_classes <= 0:
+        raise ValueError(f"num_classes must be > 0, got {num_classes}")
     
     # -------------------------------------------------------------------------
     # 1. Definizione dell'Input

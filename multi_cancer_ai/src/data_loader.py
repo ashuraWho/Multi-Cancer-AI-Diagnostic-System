@@ -1,29 +1,56 @@
 """
 Modulo per la gestione dei dati (Data Loading) e Data Augmentation.
+
 Crea pipeline di dati efficienti usando tf.data per massimizzare l'utilizzo della GPU.
+Gestisce il caricamento da disco, lo split train/validation, la normalizzazione,
+e l'applicazione di data augmentation per migliorare la generalizzazione del modello.
+
+Author: Multi-Cancer AI Team
+License: MIT
 """
 
+from typing import Tuple, Dict
 import tensorflow as tf
 from multi_cancer_ai.config import config
 
-def create_generators():
+def create_generators() -> Tuple[tf.data.Dataset, tf.data.Dataset, Dict[str, int]]:
     """
     Crea e restituisce i dataset tf.data ottimizzati per Training e Validation.
     
-    Questa funzione:
-    1. Legge le immagini dalla directory su disco.
-    2. Divide in Training e Validation set.
-    3. Mappa i nomi delle classi ai numeri (Label Encoding).
-    4. Applica Data Augmentation (solo su training) per aumentare la varietà dei dati.
-    5. Applica Prefetching per caricare i dati in background mentre la GPU lavora.
+    Pipeline implementata:
+    1. Caricamento immagini da disco con tf.keras.utils.image_dataset_from_directory
+    2. Split automatico train/validation (80/20) con seed fisso per riproducibilità
+    3. Label encoding: nomi cartelle -> indici numerici (one-hot per training)
+    4. Data Augmentation (solo training): rotazione, zoom, flip orizzontale
+    5. Normalizzazione pixel: [0, 255] -> [0, 1]
+    6. Ottimizzazioni tf.data: prefetching, parallelizzazione I/O
     
     Returns:
-        tuple: (train_ds, val_ds, class_indices)
-               - train_ds: Dataset di training (infinito/ripetibile per epoche)
-               - val_ds: Dataset di validazione
-               - class_indices: Dizionario {NomeClasse: IndiceNumerico}
+        Tuple contenente:
+            - train_ds: Dataset di training con augmentation, pronto per .fit()
+            - val_ds: Dataset di validazione (solo normalizzazione)
+            - class_indices: Dizionario {NomeClasse: IndiceNumerico} per mapping inverso
+    
+    Raises:
+        FileNotFoundError: Se DATASET_PATH non esiste o è vuoto.
+        ValueError: Se non vengono trovate classi valide nel dataset.
+    
+    Note:
+        - Il dataset di training è infinito (ripetibile per epoche multiple)
+        - La validazione non ha shuffle per metriche stabili
+        - Il caching è disabilitato per evitare OOM su dataset grandi (>10GB)
+    
+    Example:
+        >>> train_ds, val_ds, class_map = create_generators()
+        >>> print(f"Classi trovate: {list(class_map.keys())}")
     """
-    print(f"[INFO] Caricamento dati da directory: {config.DATASET_PATH}")
+    import logging
+    logger = logging.getLogger("MultiCancerAI")
+    
+    logger.info(f"Caricamento dati da directory: {config.DATASET_PATH}")
+    
+    if not config.DATASET_PATH.exists():
+        raise FileNotFoundError(f"Dataset path non trovato: {config.DATASET_PATH}")
 
     # ==============================================================================
     # 1. Caricamento Dataset Raw (da disco)
@@ -139,8 +166,11 @@ def create_generators():
     train_ds = prepare_train(train_ds)
     val_ds = prepare_val(val_ds)
 
-    print(f"[INFO] Pipeline tf.data inizializzata correttamente.")
-    print(f"[INFO] Classi rilevate: {class_names}")
+    logger.info(f"Pipeline tf.data inizializzata correttamente.")
+    logger.info(f"Classi rilevate ({len(class_names)}): {class_names}")
+    
+    if len(class_names) == 0:
+        raise ValueError("Nessuna classe trovata nel dataset. Verifica la struttura delle cartelle.")
 
     # Restituiamo i dataset pronti e il mapping delle classi
     return train_ds, val_ds, class_indices

@@ -26,7 +26,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Si assume che la cartella 'Multi Cancer' sia parallela alla cartella del codice o in una posizione specifica.
 # BASE_DIR.parent ci porta fuori da 'multi_cancer_ai', ipotizzando che il dataset sia nella root del repository o workspace.
 # Percorso atteso: .../Multi-Cancer-AI-Diagnostic-System/Multi Cancer/Multi Cancer
-DATASET_PATH = BASE_DIR.parent / "Multi Cancer" / "Multi Cancer"
+#
+# Best practice "da produzione": rendere il path configurabile via variabile d'ambiente.
+# Questo evita modifiche al codice quando:
+# - il dataset è su un disco esterno
+# - si lavora in CI/CD o in container
+# - la struttura delle cartelle è diversa
+#
+# Esempio:
+#   export MULTI_CANCER_DATASET_PATH="/path/al/dataset/Multi Cancer"
+_DATASET_ENV = os.getenv("MULTI_CANCER_DATASET_PATH")
+DATASET_PATH = Path(_DATASET_ENV).expanduser().resolve() if _DATASET_ENV else (BASE_DIR.parent / "Multi Cancer" / "Multi Cancer")
 
 # Definiamo dove salvare i modelli addestrati (.h5, .tflite).
 MODELS_DIR = BASE_DIR / "models"

@@ -1,0 +1,54 @@
+# =========================
+# Python / Virtualenv
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv/
+
+# =========================
+# Jupyter / notebooks
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# OS / Editor
+# =========================
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# Logs / artifacts
+# =========================
+*.log
+logs/
+
+# =========================
+# ML artifacts (large binaries)
+# Keep directory structure, ignore heavy files by default
+# =========================
+**/*.h5
+**/*.tflite
+**/*.ckpt
+**/*.pkl
+**/*.joblib
+
+# =========================
+# Datasets (very large)
+# If you want to version the dataset, remove this rule
+# =========================
+Multi Cancer/
+
+# =========================
+# User-labeled data (Active Learning)
+# Potentially contains PHI/PII depending on usage
+# =========================
+multi_cancer_ai/user_data/
