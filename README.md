@@ -83,61 +83,61 @@ Il **Multi-Cancer AI Diagnostic System** è una soluzione completa di Computer V
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    TRAINING PIPELINE                          │
+│                    TRAINING PIPELINE                        │
 ├─────────────────────────────────────────────────────────────┤
-│                                                               │
-│  Dataset (Multi Cancer/)                                      │
-│       │                                                       │
+│                                                             │
+│  Dataset (Multi Cancer/)                                    │
+│       │                                                     │
 │       ├─► Data Loader (tf.data)                             │
-│       │   ├─ Split Train/Val (80/20)                         │
-│       │   ├─ Data Augmentation (Training)                    │
-│       │   └─ Prefetching & Parallel I/O                      │
-│       │                                                       │
-│       ├─► Model Builder                                       │
-│       │   ├─ EfficientNetV2-B0 (Frozen, ImageNet)          │
-│       │   └─ Custom Head (Trainable)                         │
+│       │   ├─ Split Train/Val (80/20)                        │
+│       │   ├─ Data Augmentation (Training)                   │
+│       │   └─ Prefetching & Parallel I/O                     │
+│       │                                                     │
+│       ├─► Model Builder                                     │
+│       │   ├─ EfficientNetV2-B0 (Frozen, ImageNet)           │
+│       │   └─ Custom Head (Trainable)                        │
 │       │       ├─ GlobalAveragePooling2D                     │
-│       │       ├─ BatchNorm + Dropout                         │
-│       │       └─ Dense(8, Softmax)                           │
-│       │                                                       │
-│       ├─► Trainer                                             │
-│       │   ├─ ModelCheckpoint (best val_accuracy)             │
-│       │   ├─ EarlyStopping (patience=10)                      │
-│       │   ├─ ReduceLROnPlateau (factor=0.2)                  │
-│       │   └─ CSVLogger (metrics tracking)                    │
-│       │                                                       │
-│       └─► Evaluator                                           │
-│           ├─ Classification Report (Precision/Recall/F1)     │
-│           ├─ Confusion Matrix                                │
-│           └─ Grad-CAM Heatmaps                               │
-│                                                               │
+│       │       ├─ BatchNorm + Dropout                        │
+│       │       └─ Dense(8, Softmax)                          │
+│       │                                                     │
+│       ├─► Trainer                                           │
+│       │   ├─ ModelCheckpoint (best val_accuracy)            │
+│       │   ├─ EarlyStopping (patience=10)                    │
+│       │   ├─ ReduceLROnPlateau (factor=0.2)                 │
+│       │   └─ CSVLogger (metrics tracking)                   │
+│       │                                                     │
+│       └─► Evaluator                                         │
+│           ├─ Classification Report (Precision/Recall/F1)    │
+│           ├─ Confusion Matrix                               │
+│           └─ Grad-CAM Heatmaps                              │
+│                                                             │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│                    INFERENCE PIPELINE                        │
+│                    INFERENCE PIPELINE                       │
 ├─────────────────────────────────────────────────────────────┤
-│                                                               │
-│  Input Image (224x224x3)                                      │
-│       │                                                       │
-│       ├─► Preprocessing                                       │
-│       │   ├─ Resize to (224, 224)                            │
-│       │   └─ Normalize [0, 255] → [0, 1]                     │
-│       │                                                       │
-│       ├─► Model Inference                                     │
-│       │   ├─ EfficientNetV2 Feature Extraction               │
-│       │   └─ Classification Head                             │
-│       │       └─ Softmax → Probabilities [8]                 │
-│       │                                                       │
-│       ├─► Post-Processing                                     │
+│                                                             │
+│  Input Image (224x224x3)                                    │
+│       │                                                     │
+│       ├─► Preprocessing                                     │
+│       │   ├─ Resize to (224, 224)                           │
+│       │   └─ Normalize [0, 255] → [0, 1]                    │
+│       │                                                     │
+│       ├─► Model Inference                                   │
+│       │   ├─ EfficientNetV2 Feature Extraction              │
+│       │   └─ Classification Head                            │
+│       │       └─ Softmax → Probabilities [8]                │
+│       │                                                     │
+│       ├─► Post-Processing                                   │
 │       │   ├─ Top-K Predictions                              │
-│       │   ├─ Confidence Scores                               │
-│       │   └─ Class Name Mapping                               │
-│       │                                                       │
-│       └─► Optional: Grad-CAM                                 │
-│           ├─ Gradient Computation                            │
-│           ├─ Heatmap Generation                              │
-│           └─ Overlay Visualization                           │
-│                                                               │
+│       │   ├─ Confidence Scores                              │
+│       │   └─ Class Name Mapping                             │
+│       │                                                     │
+│       └─► Optional: Grad-CAM                                │
+│           ├─ Gradient Computation                           │
+│           ├─ Heatmap Generation                             │
+│           └─ Overlay Visualization                          │
+│                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
