@@ -256,6 +256,25 @@ class HomeFrame(ctk.CTkFrame):
         self.lbl_main.configure(text=t["home_welcome"])
         self.lbl_status_title.configure(text=t["home_status"])
         self.lbl_instr.configure(text=t["home_instr"])
+    
+    def update_model_status(self, status_text: str, model_name: str = "", is_ready: bool = False):
+        """
+        Aggiorna lo stato del modello nel HomeFrame.
+        
+        Args:
+            status_text: Testo dello stato (es. "Model loaded", "Checking model...")
+            model_name: Nome del modello caricato (opzionale)
+            is_ready: Se True, mostra in verde, altrimenti in arancione
+        """
+        self.lbl_model_status.configure(
+            text=status_text,
+            text_color="green" if is_ready else "orange"
+        )
+        
+        if model_name:
+            self.lbl_model_name.configure(text=f"Model: {model_name}")
+        else:
+            self.lbl_model_name.configure(text="")
 
 class DiagnosisFrame(ctk.CTkFrame):
     def __init__(self, master):
@@ -286,6 +305,27 @@ class DiagnosisFrame(ctk.CTkFrame):
         self.btn_load = ctk.CTkButton(self.ctrl_frame, text="Upload Image", command=self.load_image)
         self.btn_load.pack(side="left", padx=20, pady=10)
         
+        # Clear image button
+        self.btn_clear_img_diag = ctk.CTkButton(
+            self.ctrl_frame, 
+            text="Clear Image", 
+            command=self.clear_image_diagnosis, 
+            fg_color="red", 
+            hover_color="darkred",
+            state="disabled"
+        )
+        self.btn_clear_img_diag.pack(side="left", padx=5, pady=10)
+        
+        # Reload model button (always available in Diagnosis tab)
+        self.btn_reload_model_diag = ctk.CTkButton(
+            self.ctrl_frame, 
+            text="🔄 Reload Model", 
+            command=self.reload_model_diagnosis, 
+            fg_color="blue", 
+            hover_color="darkblue"
+        )
+        self.btn_reload_model_diag.pack(side="left", padx=10, pady=10)
+        
         self.status = ctk.CTkLabel(self.ctrl_frame, text="System Init...")
         self.status.pack(side="left", padx=20)
         
@@ -312,21 +352,39 @@ class DiagnosisFrame(ctk.CTkFrame):
         t = TRANSLATIONS[lang]
         
         self.btn_load.configure(text=t["diag_load_btn"])
+        self.btn_clear_img_diag.configure(text=t["diag_clear_btn"])
+        self.btn_reload_model_diag.configure(text=t["diag_reload_model_btn"])
         self.res_frame.configure(label_text=t["diag_result"].format("..."))
         self.btn_wrong.configure(text=t["diag_wrong_btn"])
         self.switch_heatmap.configure(text=t.get("diag_heatmap", "Heatmap"))
-
-    def _on_wrong_diag(self):
-        # Switch to training tab and pass current image
-        if self.current_img_path:
-            self.app.frames["Training"].set_training_image(self.current_img_path)
-            self.app.show_frame("Training")
-
-        # Variables
+    
+    def clear_image_diagnosis(self):
+        """Rimuove l'immagine corrente dal tab Diagnostica."""
         self.current_img_path = None
         self.current_pil_img = None
         self.predictions = None
         self.heatmap_var.set(False)
+        
+        # Reset canvas
+        self.canvas.configure(image=None, text="No Image")
+        self.canvas.image = None
+        
+        # Clear results
+        for widget in self.res_frame.winfo_children():
+            widget.destroy()
+        
+        # Disabilita pulsante clear
+        self.btn_clear_img_diag.configure(state="disabled")
+        
+        self.status.configure(text="Image cleared")
+
+    def _on_wrong_diag(self):
+        # Switch to training tab and pass current image
+        if self.current_img_path and self.current_pil_img:
+            self.app.frames["Training"].set_training_image(self.current_img_path, self.current_pil_img)
+            self.app.show_frame("Training")
+        else:
+            messagebox.showwarning("No Image", "Please load an image in the Diagnosis tab first.")
 
     def _toggle_heatmap(self):
         if not self.current_pil_img:
@@ -485,11 +543,42 @@ class DiagnosisFrame(ctk.CTkFrame):
         self.status.configure(text=f"Error: {err_msg}", text_color="red")
         self.progress.stop()
         self.progress.pack_forget()
+        
+        # Aggiorna anche il HomeFrame
+        home_frame = self.app.frames.get("Home")
+        if home_frame:
+            self.after(0, lambda: home_frame.update_model_status(
+                f"❌ Error: {err_msg[:50]}...",
+                "",
+                is_ready=False
+            ))
 
     def _on_model_loaded(self, msg):
         self.app.trainer_loaded = True
         # Schedule UI update on main thread
         self.after(0, lambda: self._update_status_ready(msg))
+        
+        # Aggiorna anche il HomeFrame
+        home_frame = self.app.frames.get("Home")
+        if home_frame:
+            # Estrai il nome del modello dal messaggio
+            model_name = msg
+            if "Custom" in msg:
+                model_name = "Custom Model (User Corrections)"
+            elif "Tuned" in msg:
+                model_name = "Fine-Tuned Model"
+            elif "Base" in msg:
+                model_name = "Base Model"
+            elif "TFLite" in msg:
+                model_name = "TFLite Model"
+            else:
+                model_name = msg
+            
+            self.after(0, lambda: home_frame.update_model_status(
+                "✅ Model Ready",
+                model_name,
+                is_ready=True
+            ))
 
     def _update_status_ready(self, msg):
         self.status.configure(text=f"Ready: {msg}", text_color="green")
@@ -537,6 +626,9 @@ class DiagnosisFrame(ctk.CTkFrame):
         self.current_pil_img = img
         self.heatmap_var.set(False) # Reset heatmap
         self._show_image_pil(img)
+        
+        # Abilita pulsante clear
+        self.btn_clear_img_diag.configure(state="normal")
         
 
 
@@ -643,13 +735,98 @@ class DiagnosisFrame(ctk.CTkFrame):
         
         # Store prediction for Training Tab
         self.predictions = probs
+    
+    def reload_model_diagnosis(self):
+        """
+        Ricarica il modello custom dal Diagnosis tab.
+        Utile per aggiornare il modello dopo active training senza tornare al Training tab.
+        """
+        try:
+            self.status.configure(text="Reloading model...", text_color="orange")
+            self.app.update()
+            
+            # Aggiorna HomeFrame
+            home_frame = self.app.frames.get("Home")
+            if home_frame:
+                home_frame.update_model_status("Reloading model...", "", is_ready=False)
+            
+            # Ricarica il modello custom se esiste, altrimenti usa il base
+            custom_model_path = config.MODELS_DIR / "best_model_custom.h5"
+            base_model_path = config.MODELS_DIR / "best_model.h5"
+            
+            import tensorflow as tf
+            
+            if custom_model_path.exists():
+                self.app.model = tf.keras.models.load_model(str(custom_model_path))
+                self.app.model_type = 'keras'
+                self.status.configure(text="✅ Model Reloaded (Custom)", text_color="green")
+                
+                # Aggiorna HomeFrame
+                if home_frame:
+                    home_frame.update_model_status(
+                        "✅ Model Ready",
+                        "Custom Model (User Corrections)",
+                        is_ready=True
+                    )
+                
+                messagebox.showinfo("Model Reloaded", "Custom model (with your corrections) has been loaded.")
+            elif base_model_path.exists():
+                self.app.model = tf.keras.models.load_model(str(base_model_path))
+                self.app.model_type = 'keras'
+                self.status.configure(text="✅ Model Reloaded (Base)", text_color="green")
+                
+                # Aggiorna HomeFrame
+                if home_frame:
+                    home_frame.update_model_status(
+                        "✅ Model Ready",
+                        "Base Model",
+                        is_ready=True
+                    )
+                
+                messagebox.showinfo("Model Reloaded", "Base model has been loaded.\nNo custom model found.")
+            else:
+                messagebox.showwarning("Model Not Found", "No model found. Please run training first.")
+                self.status.configure(text="No model found", text_color="red")
+                
+                # Aggiorna HomeFrame
+                if home_frame:
+                    home_frame.update_model_status(
+                        "❌ No Model Found",
+                        "",
+                        is_ready=False
+                    )
+                
+        except Exception as e:
+            import logging
+            logger = logging.getLogger("MultiCancerAI")
+            logger.error(f"Error reloading model: {e}", exc_info=True)
+            
+            self.status.configure(text=f"Error: {str(e)}", text_color="red")
+            
+            # Aggiorna HomeFrame
+            home_frame = self.app.frames.get("Home")
+            if home_frame:
+                home_frame.update_model_status(
+                    f"❌ Error: {str(e)[:50]}...",
+                    "",
+                    is_ready=False
+                )
+            
+            messagebox.showerror("Reload Error", f"Failed to reload model:\n{e}")
         
     def _goto_training(self, expert_label):
-        # Switch to Training Tab
-        self.app.show_frame("Training")
-        # Update Training Tab UI
+        # Switch to Training Tab and pass image if available
         train_frame = self.app.frames["Training"]
+        
+        # Pass image if we have it
+        if self.current_img_path and self.current_pil_img:
+            train_frame.set_training_image(self.current_img_path, self.current_pil_img)
+        
+        # Update prediction label
         train_frame.lbl_pred.configure(text=f"AI Prediction: {expert_label}")
+        
+        # Switch to training tab
+        self.app.show_frame("Training")
 
 class TrainingFrame(ctk.CTkFrame):
     def __init__(self, master):
@@ -657,14 +834,34 @@ class TrainingFrame(ctk.CTkFrame):
         self.app = master
         self.controller = master # Alias for consistency
         
+        # State variables for image
+        self.training_img_path = None
+        self.training_pil_img = None
+        
         self.lbl_title = ctk.CTkLabel(self, text="Active Training Mode", font=ctk.CTkFont(size=20, weight="bold"))
         self.lbl_title.pack(pady=20)
         
         self.lbl_instr = ctk.CTkLabel(self, text="Teach the AI...", font=ctk.CTkFont(size=12))
         self.lbl_instr.pack(pady=5)
         
-        self.img_label = ctk.CTkLabel(self, text="[No Image Selected in Diagnosis]", width=300, height=300, fg_color="gray20", corner_radius=10)
-        self.img_label.pack(pady=20)
+        # Image display frame
+        self.img_frame = ctk.CTkFrame(self)
+        self.img_frame.pack(pady=20)
+        
+        self.img_label = ctk.CTkLabel(self.img_frame, text="[No Image Selected]", width=300, height=300, fg_color="gray20", corner_radius=10)
+        self.img_label.pack(pady=10, padx=10)
+        
+        # Buttons frame for image management
+        self.img_buttons_frame = ctk.CTkFrame(self.img_frame)
+        self.img_buttons_frame.pack(pady=5)
+        
+        # Button to load image manually
+        self.btn_load_img = ctk.CTkButton(self.img_buttons_frame, text="Load Image", command=self.load_image_manual, fg_color="gray40", hover_color="gray50")
+        self.btn_load_img.pack(side="left", padx=5)
+        
+        # Button to clear image
+        self.btn_clear_img = ctk.CTkButton(self.img_buttons_frame, text="Clear Image", command=self.clear_image, fg_color="red", hover_color="darkred", state="disabled")
+        self.btn_clear_img.pack(side="left", padx=5)
         
         self.lbl_pred = ctk.CTkLabel(self, text="AI Prediction: N/A", font=ctk.CTkFont(weight="bold"))
         self.lbl_pred.pack(pady=5)
@@ -675,18 +872,145 @@ class TrainingFrame(ctk.CTkFrame):
         self.lbl_select = ctk.CTkLabel(self.correction_frame, text="Select Correct Class:")
         self.lbl_select.pack(pady=5)
         
-        self.class_var = ctk.StringVar(value=self.app.classes[0])
+        self.class_var = ctk.StringVar(value=self.app.classes[0] if self.app.classes else "")
         self.combo = ctk.CTkOptionMenu(self.correction_frame, values=self.app.classes, variable=self.class_var)
         self.combo.pack(pady=5)
         
         self.btn_train = ctk.CTkButton(self.correction_frame, text="Confirm & Train", fg_color="green", command=self.run_training)
         self.btn_train.pack(pady=20)
         
+        # Reload model button (appears after successful training)
+        self.btn_reload_model = ctk.CTkButton(
+            self.correction_frame, 
+            text="🔄 Reload Model (After Training)", 
+            command=self.reload_model, 
+            fg_color="blue", 
+            hover_color="darkblue",
+            state="disabled"  # Enabled after training
+        )
+        self.btn_reload_model.pack(pady=10)
+        
         self.status_lbl = ctk.CTkLabel(self, text="")
         self.status_lbl.pack(pady=5)
         
         # Init Language
         self.update_language(self.app.lang)
+    
+    def load_image_manual(self):
+        """Permette di caricare manualmente un'immagine nel tab Training."""
+        try:
+            path = filedialog.askopenfilename(
+                title="Select Image for Training",
+                filetypes=[("Images", "*.png *.jpg *.jpeg *.tif *.tiff")],
+            )
+            
+            if not path:
+                # Utente ha annullato la selezione
+                return
+            
+            if not path.strip():
+                messagebox.showerror("Error", "No file selected.")
+                return
+            
+            # Validazione (stessa logica di DiagnosisFrame)
+            try:
+                p = Path(path)
+            except Exception as e:
+                messagebox.showerror("Invalid Path", f"Invalid file path:\n{e}")
+                return
+            
+            # Verifica estensione
+            if p.suffix.lower() not in _ALLOWED_EXTENSIONS:
+                messagebox.showerror(
+                    "Unsupported file", 
+                    f"Unsupported extension: {p.suffix}\nAllowed: {', '.join(sorted(_ALLOWED_EXTENSIONS))}"
+                )
+                return
+            
+            # Verifica esistenza file
+            if not p.exists():
+                messagebox.showerror("File Not Found", f"File does not exist:\n{path}")
+                return
+            
+            # Verifica dimensione
+            try:
+                size = p.stat().st_size
+                if size > _MAX_IMAGE_BYTES:
+                    messagebox.showerror(
+                        "File too large", 
+                        f"File size is {size/1024/1024:.1f}MB.\nMax allowed: {_MAX_IMAGE_BYTES/1024/1024:.0f}MB."
+                    )
+                    return
+            except OSError as e:
+                messagebox.showerror("File Error", f"Cannot read file size:\n{e}")
+                return
+            
+            # Carica e verifica immagine
+            try:
+                # Prima verifica che sia un'immagine valida
+                with Image.open(path) as test_img:
+                    test_img.verify()
+            except Exception as e:
+                messagebox.showerror("Invalid Image", f"Could not read image file:\n{str(e)}\n\nFile may be corrupted or not a valid image.")
+                return
+            
+            # Ora carica l'immagine per l'uso (verify() chiude il file, quindi riapriamo)
+            try:
+                img = Image.open(path)
+                # Converti in RGB se necessario (alcuni formati come PNG con trasparenza)
+                if img.mode in ('RGBA', 'LA', 'P'):
+                    # Crea un'immagine RGB con sfondo bianco
+                    rgb_img = Image.new('RGB', img.size, (255, 255, 255))
+                    if img.mode == 'P':
+                        img = img.convert('RGBA')
+                    rgb_img.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+                    img = rgb_img
+                elif img.mode != 'RGB':
+                    img = img.convert('RGB')
+                
+                # Imposta l'immagine
+                self.set_training_image(str(path), img)
+                
+            except Exception as e:
+                import logging
+                logger = logging.getLogger("MultiCancerAI")
+                logger.error(f"Error loading image in TrainingFrame: {e}", exc_info=True)
+                messagebox.showerror("Load Error", f"Failed to load image:\n{str(e)}")
+                
+        except Exception as e:
+            import logging
+            logger = logging.getLogger("MultiCancerAI")
+            logger.error(f"Unexpected error in load_image_manual: {e}", exc_info=True)
+            messagebox.showerror("Error", f"Unexpected error loading image:\n{str(e)}")
+    
+    def clear_image(self):
+        """Rimuove l'immagine corrente dal Training tab."""
+        self.training_img_path = None
+        self.training_pil_img = None
+        self.img_label.configure(image=None, text="[No Image Selected]")
+        self.img_label.image = None
+        self.btn_clear_img.configure(state="disabled")
+    
+    def set_training_image(self, img_path: str, pil_img: Image.Image):
+        """
+        Imposta l'immagine da usare per il training.
+        
+        Args:
+            img_path: Percorso del file immagine.
+            pil_img: Oggetto PIL Image già caricato.
+        """
+        self.training_img_path = img_path
+        self.training_pil_img = pil_img
+        
+        # Mostra l'immagine ridimensionata
+        display_img = pil_img.copy()
+        display_img.thumbnail((300, 300), Image.Resampling.LANCZOS)
+        tk_img = ctk.CTkImage(light_image=display_img, dark_image=display_img, size=display_img.size)
+        self.img_label.configure(image=tk_img, text="")
+        self.img_label.image = tk_img  # Mantieni riferimento per evitare garbage collection
+        
+        # Abilita pulsante clear
+        self.btn_clear_img.configure(state="normal")
 
     def update_language(self, lang):
         from multi_cancer_ai.src.localization import TRANSLATIONS
@@ -694,28 +1018,59 @@ class TrainingFrame(ctk.CTkFrame):
         
         self.lbl_title.configure(text=t["train_title"])
         self.lbl_instr.configure(text=t["train_instr"])
+        self.btn_load_img.configure(text=t["train_load_img_btn"])
+        self.btn_clear_img.configure(text=t["train_clear_img_btn"])
         self.lbl_select.configure(text=t["train_select_label"])
         self.btn_train.configure(text=t["train_confirm_btn"])
+        self.btn_reload_model.configure(text=t["train_reload_model_btn"])
 
     def run_training(self):
-        # 1. Get image from DiagnosisFrame
-        diag_frame = self.app.frames["Diagnosis"]
-        if not diag_frame.current_pil_img:
-            self.status_lbl.configure(text="Error: No image loaded in Diagnosis tab.", text_color="red")
+        # 1. Get image - prefer training frame image, fallback to diagnosis frame
+        img_to_use = None
+        img_path_to_use = None
+        
+        if self.training_pil_img:
+            # Usa immagine caricata direttamente nel Training tab
+            img_to_use = self.training_pil_img
+            img_path_to_use = self.training_img_path
+        else:
+            # Fallback: prova a prendere da Diagnosis tab
+            diag_frame = self.app.frames["Diagnosis"]
+            if diag_frame.current_pil_img:
+                img_to_use = diag_frame.current_pil_img
+                img_path_to_use = diag_frame.current_img_path
+            else:
+                self.status_lbl.configure(
+                    text="Error: No image loaded. Please load an image first.", 
+                    text_color="red"
+                )
+                return
+        
+        if not img_to_use:
+            self.status_lbl.configure(
+                text="Error: No image available for training.", 
+                text_color="red"
+            )
             return
             
         # 2. Get Label
         label_str = self.class_var.get()
+        if label_str not in self.app.classes:
+            self.status_lbl.configure(text="Error: Invalid class selected.", text_color="red")
+            return
+        
         label_idx = self.app.classes.index(label_str)
 
         # Confirm Action
-        if not messagebox.askyesno("Confirm Training", 
-            f"Are you sure you want to teach the AI that this image is:\n\n'{label_str}'?\n\nThis will modify the model weights."):
+        from multi_cancer_ai.src.localization import TRANSLATIONS
+        t = TRANSLATIONS[self.app.lang]
+        
+        if not messagebox.askyesno(t["train_confirm_dialog"], t["train_confirm_msg"].format(label_str)):
             self.status_lbl.configure(text="Training cancelled.", text_color="gray")
             return
         
         # 3. Preprocess
-        img = diag_frame.current_pil_img.resize((config.IMG_WIDTH, config.IMG_HEIGHT), Image.Resampling.LANCZOS)
+        img = img_to_use.resize((config.IMG_WIDTH, config.IMG_HEIGHT), Image.Resampling.LANCZOS)
         img_arr = self.app.np.array(img).astype('float32') / 255.0
         
         # 4. Train
@@ -733,13 +1088,132 @@ class TrainingFrame(ctk.CTkFrame):
         success, msg = self.app.active_trainer.train_on_single_image(img_arr, label_idx)
         
         if success:
-            self.app.active_trainer.save_labeled_image(diag_frame.current_img_path, label_str)
-            self.status_lbl.configure(text=f"Success! {msg}", text_color="green")
-            # Force Keras model usage in App for next inference to see improvement
-            self.app.model_type = 'keras'
-            self.app.model = self.app.active_trainer.model 
+            # Salva immagine etichettata (usa il path corretto)
+            if img_path_to_use:
+                self.app.active_trainer.save_labeled_image(img_path_to_use, label_str)
+            
+            from multi_cancer_ai.src.localization import TRANSLATIONS
+            t = TRANSLATIONS[self.app.lang]
+            
+            # Messaggio informativo
+            info_msg = ""
+            if self.app.lang == "it":
+                info_msg = (
+                    f"✅ Training completato! {msg}\n\n"
+                    "⚠️ IMPORTANTE:\n"
+                    "1. Clicca 'Ricarica Modello' per usare il modello aggiornato\n"
+                    "2. Il training su una singola immagine può richiedere più sessioni per vedere miglioramenti significativi\n"
+                    "3. Per risultati migliori, correggi più immagini della stessa classe"
+                )
+            else:
+                info_msg = (
+                    f"✅ Training completed! {msg}\n\n"
+                    "⚠️ IMPORTANT:\n"
+                    "1. Click 'Reload Model' to use the updated model\n"
+                    "2. Training on a single image may require multiple sessions to see significant improvements\n"
+                    "3. For better results, correct more images of the same class"
+                )
+            
+            self.status_lbl.configure(text=info_msg, text_color="green")
+            
+            # Abilita pulsante reload model
+            self.btn_reload_model.configure(state="normal")
+            
+            # NOTA: Non ricarichiamo automaticamente il modello perché potrebbe essere pesante.
+            # L'utente deve cliccare esplicitamente "Reload Model" quando è pronto.
         else:
             self.status_lbl.configure(text=f"Error: {msg}", text_color="red")
+    
+    def reload_model(self):
+        """
+        Ricarica il modello custom aggiornato dopo l'active training.
+        Questo permette di usare il modello migliorato per nuove inferenze.
+        """
+        try:
+            self.status_lbl.configure(text="Reloading model...", text_color="orange")
+            self.app.update()
+            
+            # Aggiorna HomeFrame
+            home_frame = self.app.frames.get("Home")
+            if home_frame:
+                home_frame.update_model_status("Reloading model...", "", is_ready=False)
+            
+            # Ricarica il modello custom se esiste
+            custom_model_path = config.MODELS_DIR / "best_model_custom.h5"
+            
+            if not custom_model_path.exists():
+                messagebox.showwarning(
+                    "Model Not Found", 
+                    "Custom model not found. Make sure you've completed at least one training session."
+                )
+                self.status_lbl.configure(text="No custom model found.", text_color="red")
+                
+                # Aggiorna HomeFrame
+                if home_frame:
+                    home_frame.update_model_status(
+                        "❌ No Custom Model Found",
+                        "",
+                        is_ready=False
+                    )
+                return
+            
+            # Carica il modello
+            import tensorflow as tf
+            self.app.model = tf.keras.models.load_model(str(custom_model_path))
+            self.app.model_type = 'keras'
+            
+            # Aggiorna anche il DiagnosisFrame per usare il nuovo modello
+            diag_frame = self.app.frames["Diagnosis"]
+            if hasattr(diag_frame, 'status'):
+                diag_frame.status.configure(
+                    text="✅ Model Reloaded (Custom)", 
+                    text_color="green"
+                )
+            
+            # Aggiorna HomeFrame
+            if home_frame:
+                home_frame.update_model_status(
+                    "✅ Model Ready",
+                    "Custom Model (User Corrections)",
+                    is_ready=True
+                )
+            
+            from multi_cancer_ai.src.localization import TRANSLATIONS
+            t = TRANSLATIONS[self.app.lang]
+            
+            self.status_lbl.configure(
+                text=t["train_reload_success"], 
+                text_color="green"
+            )
+            
+            # Disabilita il pulsante dopo il reload (può essere riabilitato dopo nuovo training)
+            self.btn_reload_model.configure(state="disabled")
+            
+            messagebox.showinfo(
+                t["train_confirm_dialog"].replace("Training", "Model"), 
+                t["train_reload_success"]
+            )
+            
+        except Exception as e:
+            import logging
+            logger = logging.getLogger("MultiCancerAI")
+            logger.error(f"Error reloading model: {e}", exc_info=True)
+            
+            self.status_lbl.configure(
+                text=f"Error reloading model: {str(e)}", 
+                text_color="red"
+            )
+            
+            # Aggiorna HomeFrame
+            home_frame = self.app.frames.get("Home")
+            if home_frame:
+                home_frame.update_model_status(
+                    f"❌ Error: {str(e)[:50]}...",
+                    "",
+                    is_ready=False
+                )
+            
+            messagebox.showerror("Reload Error", f"Failed to reload model:\n{e}")
 
 # Configuration for CustomTkinter
 ctk.set_appearance_mode("Dark")

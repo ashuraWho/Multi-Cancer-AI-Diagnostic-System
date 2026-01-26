@@ -30,6 +30,8 @@ TRANSLATIONS = {
         # --- Pagina Diagnostica ---
         "diag_title": "Sistema Diagnostico",
         "diag_load_btn": "Carica Immagine",
+        "diag_clear_btn": "Rimuovi Immagine",
+        "diag_reload_model_btn": "🔄 Ricarica Modello",
         "diag_predict_btn": "Esegui Diagnosi",
         "diag_result": "Risultato: {}",
         "diag_confidence": "Confidenza: {:.1f}%", # Placeholder {:.1f} per numero float a 1 decimale
@@ -40,9 +42,15 @@ TRANSLATIONS = {
         # --- Pagina Training Attivo ---
         "train_title": "Training Attivo (Insegnamento)",
         "train_instr": "Se l'AI ha sbagliato, seleziona qui la classe corretta.\nIl modello imparerà da questa immagine.",
+        "train_load_img_btn": "Carica Immagine",
+        "train_clear_img_btn": "Rimuovi Immagine",
         "train_select_label": "Classe Corretta:",
         "train_confirm_btn": "Conferma e Addestra",
+        "train_reload_model_btn": "🔄 Ricarica Modello (Dopo Training)",
         "train_success": "✅ Addestramento completato! Il modello è stato aggiornato.",
+        "train_confirm_dialog": "Conferma Training",
+        "train_confirm_msg": "Sei sicuro di voler insegnare all'AI che questa immagine è:\n\n'{}'?\n\nQuesto modificherà i pesi del modello.",
+        "train_reload_success": "Modello ricaricato con successo! Puoi ora testarlo nel tab Diagnostica.",
         
         # --- Pagina Info ---
         "info_title": "Struttura Dataset & Enciclopedia Medica",
@@ -70,6 +78,8 @@ TRANSLATIONS = {
         # --- Diagnostics Page ---
         "diag_title": "Diagnostic System",
         "diag_load_btn": "Load Image",
+        "diag_clear_btn": "Clear Image",
+        "diag_reload_model_btn": "🔄 Reload Model",
         "diag_predict_btn": "Run Diagnosis",
         "diag_result": "Result: {}",
         "diag_confidence": "Confidence: {:.1f}%",
@@ -80,9 +90,15 @@ TRANSLATIONS = {
         # --- Active Training Page ---
         "train_title": "Active Training (Teaching)",
         "train_instr": "If AI was wrong, select the correct class below.\nThe model will learn from this image immediately.",
+        "train_load_img_btn": "Load Image",
+        "train_clear_img_btn": "Clear Image",
         "train_select_label": "Correct Class:",
         "train_confirm_btn": "Confirm & Train",
+        "train_reload_model_btn": "🔄 Reload Model (After Training)",
         "train_success": "✅ Training complete! Model updated.",
+        "train_confirm_dialog": "Confirm Training",
+        "train_confirm_msg": "Are you sure you want to teach the AI that this image is:\n\n'{}'?\n\nThis will modify the model weights.",
+        "train_reload_success": "Model reloaded successfully! You can now test it in the Diagnosis tab.",
         
         # --- Info Page ---
         "info_title": "Dataset Structure & Medical Encyclopedia",

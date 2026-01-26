@@ -65,13 +65,16 @@ Il **Multi-Cancer AI Diagnostic System** è una soluzione completa di Computer V
 - **Confusion Matrix**: Analisi dettagliata degli errori di classificazione
 
 ### 🔄 Active Learning
-- **Online Fine-Tuning**: Aggiornamento modello in tempo reale su correzioni utente
-- **Offline Data Collection**: Accumulo di immagini etichettate per training completo
+- **Online Fine-Tuning**: Aggiornamento modello in tempo reale su correzioni utente (10 epoche, LR=1e-5)
+- **Offline Data Collection**: Accumulo di immagini etichettate in `user_data/labeled/` per training completo futuro
 - **Human-in-the-Loop**: Integrazione feedback medico nel ciclo di apprendimento
+- **Model Reload**: Pulsante dedicato per ricaricare il modello aggiornato dopo il training
+- **Image Management**: Pulsanti "Clear Image" per gestire facilmente le immagini nei tab Diagnosis e Training
 
 ### 📱 Deployment Ready
 - **TFLite Export**: Modello ottimizzato per mobile/embedded (<20MB con FP16)
-- **Desktop GUI**: Applicazione CustomTkinter cross-platform (Windows/Mac/Linux)
+- **Desktop GUI**: Applicazione CustomTkinter cross-platform (Windows/Mac/Linux) con supporto multi-lingua (IT/EN)
+- **Real-time Status**: Home tab con aggiornamento automatico dello stato del modello
 - **API-Ready**: Architettura modulare per integrazione REST/GraphQL
 
 ---
@@ -400,12 +403,36 @@ LEARNING_RATE = 5e-5  # LR più basso per fine-tuning conservativo
 
 ### Desktop GUI
 
-L'applicazione desktop (`desktop_app.py`) fornisce:
+L'applicazione desktop (`desktop_app.py`) fornisce un'interfaccia completa e user-friendly per l'inference e l'active learning.
 
-- **Diagnosis Tab**: Upload immagine, classificazione, visualizzazione probabilità
-- **Grad-CAM Visualization**: Heatmap sovrapposta all'immagine originale
-- **Active Training Tab**: Correzione predizioni errate e fine-tuning online
-- **Dataset Info**: Struttura dataset e glossario medico
+#### Tab Disponibili
+
+1. **Home / Stato**
+   - Panoramica del sistema
+   - Stato del modello in tempo reale (✅ Ready / ⏳ Loading / ❌ Error)
+   - Nome del modello caricato (Base / Custom / TFLite)
+   - Istruzioni rapide
+
+2. **Diagnostica**
+   - **Upload Immagine**: Carica immagini per classificazione (PNG, JPG, JPEG, TIF, TIFF, max 25MB)
+   - **Clear Image**: Rimuove l'immagine corrente per caricarne una nuova
+   - **Reload Model**: Ricarica il modello (utile dopo active training)
+   - **Classificazione**: Mostra top-5 predizioni con probabilità
+   - **Grad-CAM Visualization**: Heatmap sovrapposta all'immagine (toggle on/off)
+   - **Correzione Rapida**: Pulsante "Diagnosi Errata?" per passare al Training tab
+
+3. **Training Attivo**
+   - **Load Image**: Carica manualmente un'immagine per il training
+   - **Clear Image**: Rimuove l'immagine corrente
+   - **Selezione Classe**: Dropdown per selezionare la classe corretta
+   - **Confirm & Train**: Avvia il fine-tuning online (10 epoche, LR=1e-5)
+   - **Reload Model**: Ricarica il modello aggiornato dopo il training
+   - **Status**: Messaggi informativi sul processo di training
+
+4. **Dataset Info**
+   - Struttura del dataset
+   - Glossario medico (IT/EN)
+   - Informazioni sulle classi supportate
 
 **Avvio:**
 ```bash
@@ -413,10 +440,42 @@ python -m multi_cancer_ai.desktop_app
 ```
 
 **Features:**
-- Supporto multi-lingua (IT/EN)
-- Tema chiaro/scuro
-- Validazione input (formato, dimensione file)
-- Logging errori strutturato
+- **Multi-lingua**: Supporto completo Italiano/Inglese con toggle rapido
+- **Tema**: Dark/Light mode configurabile
+- **Validazione Input**: Controllo formato file, dimensione, integrità immagine
+- **Error Handling**: Messaggi di errore chiari e logging strutturato
+- **Real-time Updates**: Stato del modello aggiornato automaticamente in tutti i tab
+
+### Workflow Active Learning Completo
+
+Il sistema supporta un workflow completo di Active Learning per migliorare il modello con feedback umano:
+
+1. **Diagnosi Iniziale**
+   - Carica un'immagine nel tab **Diagnostica**
+   - Il modello fornisce una predizione con confidence score
+   - Visualizza Grad-CAM per vedere su cosa si basa la decisione
+
+2. **Correzione**
+   - Se la predizione è errata, clicca **"Diagnosi Errata? Correggila!"**
+   - L'immagine viene automaticamente passata al tab **Training Attivo**
+   - Seleziona la classe corretta dal dropdown
+   - Clicca **"Conferma e Addestra"**
+
+3. **Training Online**
+   - Il modello viene aggiornato con fine-tuning (10 epoche, LR=1e-5)
+   - L'immagine corretta viene salvata in `user_data/labeled/<Classe>/`
+   - Il modello aggiornato viene salvato in `models/best_model_custom.h5`
+
+4. **Applicazione Miglioramenti**
+   - Clicca **"🔄 Ricarica Modello"** nel tab Training o Diagnosis
+   - Il modello custom viene ricaricato in memoria
+   - Testa con la stessa immagine o nuove immagini per vedere i miglioramenti
+
+**Note Importanti:**
+- Il training su una singola immagine può richiedere più sessioni per vedere miglioramenti significativi
+- Per risultati migliori, correggi 3-5 immagini della stessa classe
+- Il modello migliora in modo incrementale: ogni correzione aiuta
+- Le immagini corrette vengono accumulate per un training completo futuro
 
 ### API Programmabile
 
@@ -425,6 +484,7 @@ Per integrazione in pipeline personalizzate:
 ```python
 from multi_cancer_ai.src.evaluator import Evaluator, GradCAM
 from multi_cancer_ai.src.model import build_model
+import tensorflow as tf
 
 # Carica modello
 model = tf.keras.models.load_model("models/best_model.h5")
@@ -433,6 +493,17 @@ model = tf.keras.models.load_model("models/best_model.h5")
 grad_cam = GradCAM(model)
 heatmap = grad_cam.compute_heatmap(img_array, class_idx=2)
 overlay = grad_cam.overlay_heatmap(heatmap, original_img, alpha=0.4)
+
+# Active Learning (programmatico)
+from multi_cancer_ai.src.active_trainer import ActiveTrainer
+
+trainer = ActiveTrainer()
+success, msg = trainer.load_model_for_training()
+if success:
+    success, msg = trainer.train_on_single_image(img_array, correct_label_idx)
+    if success:
+        # Modello salvato in models/best_model_custom.h5
+        print("Model updated!")
 ```
 
 ---
@@ -574,6 +645,32 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 **Soluzione**: Usa solo operazioni TFLite-compatibili o salta la conversione (opzionale).
 
+#### 7. Active Learning non migliora il modello
+
+**Causa**: Training su singola immagine con LR molto basso (1e-5) richiede più sessioni.
+
+**Soluzione**:
+- Correggi 3-5 immagini della stessa classe per vedere miglioramenti significativi
+- Dopo ogni training, ricarica il modello con "🔄 Reload Model"
+- Verifica che il modello custom venga usato (status: "Model Reloaded (Custom)")
+- Il miglioramento è incrementale: ogni correzione aiuta, ma serve pazienza
+
+#### 8. Home tab mostra sempre "Checking model..."
+
+**Causa**: Il HomeFrame non viene aggiornato quando il modello viene caricato.
+
+**Soluzione**: Già risolto! Il HomeFrame si aggiorna automaticamente. Se persiste, riavvia l'app.
+
+#### 9. Errore nel caricare immagine nel Training tab
+
+**Causa**: Formato immagine non supportato o file corrotto.
+
+**Soluzione**:
+- Verifica formato: PNG, JPG, JPEG, TIF, TIFF
+- Dimensione max: 25MB
+- Il sistema converte automaticamente RGBA/LA/P in RGB
+- Se persiste, controlla i log in `logs/` per dettagli
+
 ### Debug Mode
 
 Per logging dettagliato:
@@ -614,9 +711,10 @@ pip install -e .
 ### Code Style
 
 - **PEP 8**: Segui Python style guide
-- **Type Hints**: Aggiungi type hints a tutte le funzioni
-- **Docstrings**: Google/NumPy style (già implementato)
-- **Logging**: Usa `logging` invece di `print()`
+- **Type Hints**: Aggiungi type hints a tutte le funzioni (già implementato nei moduli principali)
+- **Docstrings**: Google/NumPy style (già implementato con esempi)
+- **Logging**: Usa `logging` invece di `print()` (già implementato)
+- **Localization**: Aggiungi traduzioni IT/EN in `src/localization.py` per nuove stringhe UI
 
 ### Testing
 
@@ -691,6 +789,30 @@ L'autore e i contributori declinano ogni responsabilità per:
 - **Architettura**: EfficientNetV2 (Google AI Research)
 - **Framework**: TensorFlow / Keras team
 - **Community**: Tutti i contributori e tester
+
+---
+
+## 📝 Changelog Recente
+
+### Migliorie UI e UX (Gennaio 2026)
+
+- ✅ **Pulsante "Clear Image"**: Disponibile sia nel tab Diagnostica che Training per gestire facilmente le immagini
+- ✅ **Pulsante "Reload Model"**: Ricarica il modello custom dopo active training (disponibile in Diagnosis e Training tab)
+- ✅ **Home Tab Aggiornato**: Stato del modello in tempo reale con aggiornamento automatico
+- ✅ **Traduzioni Complete**: Tutti i pulsanti e messaggi ora supportano IT/EN completamente
+- ✅ **Active Learning Migliorato**: 
+  - Epoche aumentate da 5 a 10 per migliore apprendimento
+  - Messaggi informativi più chiari sul processo
+  - Gestione errori migliorata
+- ✅ **Validazione Input**: Controllo formato, dimensione e integrità immagini
+- ✅ **Code Quality**: Type hints completi, docstring migliorate, logging strutturato
+
+### Bugfix
+
+- 🐛 Fix: Import numpy mancante in `evaluator.py` (causava crash in Grad-CAM)
+- 🐛 Fix: Configurazione dataset path via environment variable
+- 🐛 Fix: Home tab non si aggiornava dopo caricamento modello
+- 🐛 Fix: Immagini RGBA/LA/P convertite automaticamente in RGB
 
 ---
 

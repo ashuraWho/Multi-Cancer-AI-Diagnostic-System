@@ -171,9 +171,12 @@ class ActiveTrainer:
             
             logger.info(f"[ActiveTrainer] Training on class index: {label_index} ({list(config.CLASS_MAPPING.keys())[label_index]})")
             
-            # Eseguiamo il training (fit) per poche epoche (es. 5) su questo singolo campione.
-            # verbose=0 nasconde l'output della console per pulizia.
-            history = self.model.fit(X, y, epochs=5, verbose=0)
+            # Eseguiamo il training (fit) per più epoche su questo singolo campione.
+            # Aumentato a 10 epoche per dare più tempo al modello di apprendere.
+            # Usiamo un batch size di 1 (singola immagine) e verbose=0 per pulizia.
+            # NOTA: Training su singola immagine può causare overfitting, ma è accettabile
+            # per active learning dove l'obiettivo è correggere rapidamente errori specifici.
+            history = self.model.fit(X, y, epochs=10, batch_size=1, verbose=0)
             
             # Recuperiamo l'ultimo valore di loss per monitorare se sta imparando.
             loss = history.history['loss'][-1]
