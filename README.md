@@ -5,7 +5,6 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
 [![TensorFlow](https://img.shields.io/badge/TensorFlow-2.16%2B-orange)](https://www.tensorflow.org/)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![Code Style](https://img.shields.io/badge/Code%20Style-PEP%208-blueviolet)](https://pep8.org/)
 
 ---
@@ -175,7 +174,7 @@ Multi-Cancer-AI-Diagnostic-System/
 │   │   └── knowledge_base.py      # 📚 Medical glossary
 │   │
 │   ├── tools/
-│   │   ├── import_kaggle.py      # 📥 Dataset downloader
+│   │   ├── import_kaggle.py       # 📥 Dataset downloader
 │   │   ├── finetune.py            # 🔧 Incremental training
 │   │   └── inspect_dataset.py     # 🔍 Dataset inspector
 │   │
@@ -678,26 +677,11 @@ L'autore e i contributori declinano ogni responsabilità per:
 
 ---
 
-## 📄 Licenza
-
-Questo progetto è rilasciato sotto licenza **MIT License**.
-
-Vedi file [LICENSE](LICENSE) per dettagli completi.
-
-### Uso Commerciale
-
-Permesso, con le seguenti condizioni:
-- Mantenere copyright notice
-- Includere licenza MIT in distribuzioni
-- **Non** usare per scopi medici senza approvazioni regolatorie appropriate
-
----
-
 ## 📞 Contatti e Supporto
 
 - **Issues**: [GitHub Issues](https://github.com/ashuraWho/Multi-Cancer-AI-Diagnostic-System/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/ashuraWho/Multi-Cancer-AI-Diagnostic-System/discussions)
-- **Email**: (aggiungi email se disponibile)
+- **Email**: emanueleanzellotti@gmail.com
 
 ---
 
